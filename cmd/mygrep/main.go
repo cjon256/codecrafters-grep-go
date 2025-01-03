@@ -41,7 +41,19 @@ func main() {
 
 func matchLine(line []byte, pattern string) (bool, error) {
 	if pattern[:1] == "[" && pattern[len(pattern)-1:] == "]" {
-		pattern = pattern[1 : len(pattern)-1]
+		if pattern[1:2] == "^" {
+			// wow, this is ugly, there has to be a better way...
+			excludedChars := []byte(pattern[2 : len(pattern)-1])
+			f := func(r rune) bool {
+				s := fmt.Sprintf("%c", r)
+				ok := !bytes.ContainsAny(excludedChars, s)
+				return ok
+			}
+			ok := bytes.ContainsFunc(line, f)
+			return ok, nil
+		} else {
+			pattern = pattern[1 : len(pattern)-1]
+		}
 	} else if pattern == "\\d" {
 		pattern = "0123456789"
 	} else if pattern == "\\w" {
@@ -49,12 +61,6 @@ func matchLine(line []byte, pattern string) (bool, error) {
 	} else if utf8.RuneCountInString(pattern) != 1 {
 		return false, fmt.Errorf("unsupported pattern: %q", pattern)
 	}
-
-	// var ok bool
-	//
-
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	// fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
 
 	ok := bytes.ContainsAny(line, pattern)
 
