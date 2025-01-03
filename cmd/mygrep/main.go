@@ -40,7 +40,9 @@ func main() {
 }
 
 func matchLine(line []byte, pattern string) (bool, error) {
-	if pattern == "\\d" {
+	if pattern[:1] == "[" && pattern[len(pattern)-1:] == "]" {
+		pattern = pattern[1 : len(pattern)-1]
+	} else if pattern == "\\d" {
 		pattern = "0123456789"
 	} else if pattern == "\\w" {
 		pattern = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"
