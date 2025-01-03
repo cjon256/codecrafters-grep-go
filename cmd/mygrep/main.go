@@ -43,7 +43,7 @@ func matchLine(line []byte, pattern string) (bool, error) {
 	if pattern == "\\d" {
 		pattern = "0123456789"
 	} else if pattern == "\\w" {
-		pattern = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+		pattern = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"
 	} else if utf8.RuneCountInString(pattern) != 1 {
 		return false, fmt.Errorf("unsupported pattern: %q", pattern)
 	}
