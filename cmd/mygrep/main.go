@@ -2,10 +2,11 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"unicode/utf8"
+	"strings"
 )
 
 // Ensures gofmt doesn't remove the "bytes" import above (feel free to remove this!)
@@ -26,43 +27,108 @@ func main() {
 		os.Exit(2)
 	}
 
-	ok, err := matchLine(line, pattern)
+	matched, err := matchLine(line, pattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
 	}
 
-	if !ok {
+	if matched {
+		os.Exit(0)
+	} else {
 		os.Exit(1)
 	}
-
-	// default exit code is 0 which means success
 }
 
-func matchLine(line []byte, pattern string) (bool, error) {
-	if pattern[:1] == "[" && pattern[len(pattern)-1:] == "]" {
-		if pattern[1:2] == "^" {
-			// wow, this is ugly, there has to be a better way...
-			excludedChars := []byte(pattern[2 : len(pattern)-1])
-			f := func(r rune) bool {
-				s := fmt.Sprintf("%c", r)
-				ok := !bytes.ContainsAny(excludedChars, s)
-				return ok
+var (
+	digits    = "0123456789"
+	alpha     = "abcdefghijklmnopqrstuvwxyz"
+	wordChars = alpha + strings.ToUpper(alpha) + digits + "_"
+)
+
+type matchPoint struct {
+	matchChars string
+	inverted   bool
+}
+
+func parsePattern(patternIn string) ([]matchPoint, error) {
+	index := 0
+	parseSetPattern := func(inverted bool) (matchPoint, error) {
+		retval := matchPoint{}
+		retval.inverted = inverted
+		chars := []byte{}
+		for index < len(patternIn) {
+			switch patternIn[index] {
+			case ']':
+				retval.matchChars = string(chars[:])
+				return retval, nil
+			default:
+				chars = append(chars, patternIn[index])
 			}
-			ok := bytes.ContainsFunc(line, f)
-			return ok, nil
-		} else {
-			pattern = pattern[1 : len(pattern)-1]
+			index++
 		}
-	} else if pattern == "\\d" {
-		pattern = "0123456789"
-	} else if pattern == "\\w" {
-		pattern = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"
-	} else if utf8.RuneCountInString(pattern) != 1 {
-		return false, fmt.Errorf("unsupported pattern: %q", pattern)
+		return retval, errors.New("parse pattern not closed")
 	}
 
-	ok := bytes.ContainsAny(line, pattern)
+	pattern := []matchPoint{}
+	for index < len(patternIn) {
+		var err error
+		var p matchPoint
+		switch patternIn[index] {
+		case '[':
+			index++
+			if index < len(patternIn) && patternIn[index] == '^' {
+				index++
+				p, err = parseSetPattern(true)
+			} else {
+				p, err = parseSetPattern(false)
+			}
+			if err != nil {
+				os.Exit(3)
+			}
+			pattern = append(pattern, p)
+		default:
+			pattern = append(pattern, matchPoint{matchChars: string(patternIn[index])})
+		}
+		index++
+	}
+	return pattern, nil
+}
 
+func matchLine(line []byte, patternIn string) (bool, error) {
+	pattern, err := parsePattern(patternIn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(2)
+	}
+
+	fmt.Fprintf(os.Stderr, "%+v\n", pattern)
+	fmt.Fprintf(os.Stderr, "%s\n", line)
+
+	ok := true
+	// if pattern[:1] == "[" && pattern[len(pattern)-1:] == "]" {
+	// 	if pattern[1:2] == "^" {
+	// 		// wow, this is ugly, there has to be a better way...
+	// 		excludedChars := []byte(pattern[2 : len(pattern)-1])
+	// 		f := func(r rune) bool {
+	// 			s := fmt.Sprintf("%c", r)
+	// 			ok := !bytes.ContainsAny(excludedChars, s)
+	// 			return ok
+	// 		}
+	// 		ok := bytes.ContainsFunc(line, f)
+	// 		return ok, nil
+	// 	} else {
+	// 		pattern = pattern[1 : len(pattern)-1]
+	// 	}
+	// } else if pattern == "\\d" {
+	// 	pattern = digits
+	// } else if pattern == "\\w" {
+	// 	pattern = wordChars
+	// } else if utf8.RuneCountInString(pattern) != 1 {
+	// 	return false, fmt.Errorf("unsupported pattern: %q", pattern)
+	// }
+	//
+	// ok := bytes.ContainsAny(line, pattern)
+	//
 	return ok, nil
 }
