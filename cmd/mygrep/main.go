@@ -46,9 +46,43 @@ var (
 	wordChars = alpha + strings.ToUpper(alpha) + digits + "_"
 )
 
+type regExp struct {
+	pattern []matchPoint
+}
+
 type matchPoint struct {
 	matchChars string
 	inverted   bool
+}
+
+func (re regExp) matchHere(l *lexState) bool {
+	for i := 0; i < len(re.pattern); i++ {
+		if l.current >= len(*l.line) {
+			return false
+		}
+		if !re.pattern[i].matchOnce(l) {
+			return false
+		}
+		l.current++
+	}
+	return true
+}
+
+type lexState struct {
+	line    *string
+	current int
+}
+
+func (mp *matchPoint) matchOnce(l *lexState) bool {
+	matches := strings.Contains(mp.matchChars, string((*l.line)[l.current]))
+	if mp.inverted {
+		matches = !matches
+	}
+	if matches {
+		return true
+	} else {
+		return false
+	}
 }
 
 func parsePattern(patternIn string) ([]matchPoint, error) {
