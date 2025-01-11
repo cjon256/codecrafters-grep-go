@@ -123,6 +123,22 @@ func parsePattern(patternIn string) (regExp, error) {
 				os.Exit(3)
 			}
 			pattern = append(pattern, p)
+		case '\\':
+			index++
+			if index < len(patternIn) {
+				switch patternIn[index] {
+				case 'w':
+					pattern = append(pattern, matchPoint{matchChars: wordChars})
+				case 'd':
+					pattern = append(pattern, matchPoint{matchChars: digits})
+				default:
+					pattern = append(pattern, matchPoint{matchChars: string(patternIn[index])})
+				}
+			} else {
+				// last character was a backslash....
+				// I guess append a backslash character?
+				pattern = append(pattern, matchPoint{matchChars: "\\"})
+			}
 		default:
 			pattern = append(pattern, matchPoint{matchChars: string(patternIn[index])})
 		}
@@ -141,12 +157,14 @@ func matchLine(line []byte, patternIn string) (bool, error) {
 	fmt.Fprintf(os.Stderr, "%+v\n", pattern)
 	fmt.Fprintf(os.Stderr, "%s\n", line)
 
-	ok := pattern.matchHere(line, 0)
-
-	if ok {
-		fmt.Fprintln(os.Stderr, "ml whole matched")
-	} else {
-		fmt.Fprintln(os.Stderr, "ml whole fails")
+	for current := 0; current < len(line); current++ {
+		matchesHere := pattern.matchHere(line, current)
+		if matchesHere {
+			fmt.Fprintln(os.Stderr, "ml whole matched")
+			return true, nil
+		}
 	}
-	return ok, nil
+
+	fmt.Fprintln(os.Stderr, "ml whole fails")
+	return false, nil
 }
