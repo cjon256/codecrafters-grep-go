@@ -34,8 +34,10 @@ func main() {
 	}
 
 	if matched {
+		fmt.Fprintln(os.Stderr, "whole matched")
 		os.Exit(0)
 	} else {
+		fmt.Fprintln(os.Stderr, "whole fails")
 		os.Exit(1)
 	}
 }
@@ -55,37 +57,37 @@ type matchPoint struct {
 	inverted   bool
 }
 
-func (re regExp) matchHere(l *lexState) bool {
+func (re regExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.pattern); i++ {
-		if l.current >= len(*l.line) {
+		if current >= len(line) {
+			fmt.Fprintln(os.Stderr, "oops, got to long")
 			return false
 		}
-		if !re.pattern[i].matchOnce(l) {
+		if !re.pattern[i].matchOnce(line, current) {
+			fmt.Fprintln(os.Stderr, "match fails in regExp::matchHere")
 			return false
 		}
-		l.current++
+		current++
 	}
 	return true
 }
 
-type lexState struct {
-	line    *string
-	current int
-}
-
-func (mp *matchPoint) matchOnce(l *lexState) bool {
-	matches := strings.Contains(mp.matchChars, string((*l.line)[l.current]))
+func (mp *matchPoint) matchOnce(line []byte, current int) bool {
+	matches := strings.Contains(mp.matchChars, string((line)[current]))
+	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
 	if mp.inverted {
 		matches = !matches
 	}
 	if matches {
+		// fmt.Fprintln("matches")
 		return true
 	} else {
+		// fmt.Fprintln("fails")
 		return false
 	}
 }
 
-func parsePattern(patternIn string) ([]matchPoint, error) {
+func parsePattern(patternIn string) (regExp, error) {
 	index := 0
 	parseSetPattern := func(inverted bool) (matchPoint, error) {
 		retval := matchPoint{}
@@ -126,7 +128,7 @@ func parsePattern(patternIn string) ([]matchPoint, error) {
 		}
 		index++
 	}
-	return pattern, nil
+	return regExp{pattern}, nil
 }
 
 func matchLine(line []byte, patternIn string) (bool, error) {
@@ -139,30 +141,12 @@ func matchLine(line []byte, patternIn string) (bool, error) {
 	fmt.Fprintf(os.Stderr, "%+v\n", pattern)
 	fmt.Fprintf(os.Stderr, "%s\n", line)
 
-	ok := true
-	// if pattern[:1] == "[" && pattern[len(pattern)-1:] == "]" {
-	// 	if pattern[1:2] == "^" {
-	// 		// wow, this is ugly, there has to be a better way...
-	// 		excludedChars := []byte(pattern[2 : len(pattern)-1])
-	// 		f := func(r rune) bool {
-	// 			s := fmt.Sprintf("%c", r)
-	// 			ok := !bytes.ContainsAny(excludedChars, s)
-	// 			return ok
-	// 		}
-	// 		ok := bytes.ContainsFunc(line, f)
-	// 		return ok, nil
-	// 	} else {
-	// 		pattern = pattern[1 : len(pattern)-1]
-	// 	}
-	// } else if pattern == "\\d" {
-	// 	pattern = digits
-	// } else if pattern == "\\w" {
-	// 	pattern = wordChars
-	// } else if utf8.RuneCountInString(pattern) != 1 {
-	// 	return false, fmt.Errorf("unsupported pattern: %q", pattern)
-	// }
-	//
-	// ok := bytes.ContainsAny(line, pattern)
-	//
+	ok := pattern.matchHere(line, 0)
+
+	if ok {
+		fmt.Fprintln(os.Stderr, "ml whole matched")
+	} else {
+		fmt.Fprintln(os.Stderr, "ml whole fails")
+	}
 	return ok, nil
 }
