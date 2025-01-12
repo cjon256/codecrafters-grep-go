@@ -19,15 +19,29 @@ type MyRegExp struct {
 	matchEnd   bool
 }
 
+type wildcard int
+
+const (
+	normal wildcard = iota
+	oneOrMore
+	zeroOrOne
+)
+
+type Color int
+
 type matchPoint struct {
 	matchChars string
 	inverted   bool
-	oneOrMore  bool
+	wildtype   wildcard
 }
 
 func (re MyRegExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.mps); i++ {
 		if current >= len(line) {
+			fmt.Fprintln(os.Stderr, "oops, at the end...\n")
+			if re.mps[i].wildtype == zeroOrOne {
+				continue
+			}
 			fmt.Fprintln(os.Stderr, "oops, got to long")
 			return false
 		}
@@ -60,6 +74,22 @@ func (mp *matchPoint) matchOnce(line []byte, current *int) bool {
 	}
 }
 
+func (mp *matchPoint) matchZeroOrOne(line []byte, current *int) bool {
+	matches := strings.Contains(mp.matchChars, string((line)[*current]))
+	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
+	if mp.inverted {
+		matches = !matches
+	}
+	if matches {
+		// fmt.Fprintln("matches")
+		*current++
+		return true
+	} else {
+		// fmt.Fprintln("fails")
+		return true
+	}
+}
+
 func (mp *matchPoint) matchOneOrMore(line []byte, current *int) bool {
 	overallMatch := false
 	count := 0
@@ -86,8 +116,10 @@ func (mp *matchPoint) matchOneOrMore(line []byte, current *int) bool {
 }
 
 func (mp matchPoint) match(line []byte, current *int) bool {
-	if mp.oneOrMore {
+	if mp.wildtype == oneOrMore {
 		return mp.matchOneOrMore(line, current)
+	} else if mp.wildtype == zeroOrOne {
+		return mp.matchZeroOrOne(line, current)
 	} else {
 		return mp.matchOnce(line, current)
 	}
@@ -140,6 +172,17 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 			if err != nil {
 				os.Exit(3)
 			}
+		case '?':
+			if len(regex.mps) == 0 {
+				// handle + at start of string I guess...
+				fmt.Fprintf(os.Stderr, "questionmark at start %v+??\n", p)
+				p = matchPoint{matchChars: string(pattern[index])}
+			} else {
+				// set the last mp to be one or more...
+				regex.mps[len(regex.mps)-1].wildtype = zeroOrOne
+				index++
+				continue // don't add a matchPoint
+			}
 		case '+':
 			if len(regex.mps) == 0 {
 				// handle + at start of string I guess...
@@ -147,9 +190,9 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 				p = matchPoint{matchChars: string(pattern[index])}
 			} else {
 				// set the last mp to be one or more...
-				regex.mps[len(regex.mps)-1].oneOrMore = true
+				regex.mps[len(regex.mps)-1].wildtype = oneOrMore
 				index++
-				continue
+				continue // don't add a matchPoint
 			}
 		case '\\':
 			index++
