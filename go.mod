@@ -9,3 +9,7 @@
 module github.com/codecrafters-io/grep-starter-go
 
 go 1.22
+
+require internal/myregexp v0.0.0
+
+replace internal/myregexp => ./internal/myregexp
