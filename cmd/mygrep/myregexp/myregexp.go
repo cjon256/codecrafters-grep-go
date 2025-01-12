@@ -14,7 +14,8 @@ var (
 )
 
 type MyRegExp struct {
-	mps []matchPoint
+	mps        []matchPoint
+	matchStart bool
 }
 
 type matchPoint struct {
@@ -71,8 +72,12 @@ func parseSetPattern(inverted bool, patternIn *string, index *int) (matchPoint, 
 
 func ParsePattern(patternIn string) (MyRegExp, error) {
 	index := 0
-
 	regex := MyRegExp{}
+	if patternIn[index] == '^' {
+		regex.matchStart = true
+		index++
+	}
+
 	for index < len(patternIn) {
 		var err error
 		var p matchPoint
@@ -113,9 +118,13 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 	return regex, nil
 }
 
-func (pattern *MyRegExp) MatchLine(line []byte) (bool, error) {
-	for current := 0; current < len(line); current++ {
-		matchesHere := pattern.matchHere(line, current)
+func (re *MyRegExp) MatchLine(line []byte) (bool, error) {
+	limit := len(line)
+	if re.matchStart {
+		limit = 1
+	}
+	for current := 0; current < limit; current++ {
+		matchesHere := re.matchHere(line, current)
 		if matchesHere {
 			fmt.Fprintln(os.Stderr, "ml whole matched")
 			return true, nil
