@@ -87,26 +87,26 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 			if err != nil {
 				os.Exit(3)
 			}
-			pattern = append(pattern, p)
 		case '\\':
 			index++
 			if index < len(patternIn) {
 				switch patternIn[index] {
 				case 'w':
-					pattern = append(pattern, matchPoint{matchChars: wordChars})
+					p = matchPoint{matchChars: wordChars}
 				case 'd':
-					pattern = append(pattern, matchPoint{matchChars: digits})
+					p = matchPoint{matchChars: digits}
 				default:
-					pattern = append(pattern, matchPoint{matchChars: string(patternIn[index])})
+					p = matchPoint{matchChars: string(patternIn[index])}
 				}
 			} else {
 				// last character was a backslash....
 				// I guess append a backslash character?
-				pattern = append(pattern, matchPoint{matchChars: "\\"})
+				p = matchPoint{matchChars: "\\"}
 			}
 		default:
-			pattern = append(pattern, matchPoint{matchChars: string(patternIn[index])})
+			p = matchPoint{matchChars: string(patternIn[index])}
 		}
+		pattern = append(pattern, p)
 		index++
 	}
 	return MyRegExp{pattern}, nil
