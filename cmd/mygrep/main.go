@@ -23,7 +23,8 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "regex = '%+v'\n", regex)
 
-	line, err := io.ReadAll(os.Stdin) // assume we're only dealing with a single line
+	// XXX ReadAll assumes we're only dealing with a single line
+	line, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: read input text: %v\n", err)
 		os.Exit(2)
