@@ -14,7 +14,7 @@ var (
 )
 
 type MyRegExp struct {
-	pattern []matchPoint
+	mps []matchPoint
 }
 
 type matchPoint struct {
@@ -23,12 +23,12 @@ type matchPoint struct {
 }
 
 func (re MyRegExp) matchHere(line []byte, current int) bool {
-	for i := 0; i < len(re.pattern); i++ {
+	for i := 0; i < len(re.mps); i++ {
 		if current >= len(line) {
 			fmt.Fprintln(os.Stderr, "oops, got to long")
 			return false
 		}
-		if !re.pattern[i].matchOnce(line, current) {
+		if !re.mps[i].matchOnce(line, current) {
 			fmt.Fprintln(os.Stderr, "match fails in regExp::matchHere")
 			return false
 		}
@@ -52,26 +52,27 @@ func (mp *matchPoint) matchOnce(line []byte, current int) bool {
 	}
 }
 
+func parseSetPattern(inverted bool, patternIn *string, index *int) (matchPoint, error) {
+	retval := matchPoint{}
+	retval.inverted = inverted
+	chars := []byte{}
+	for *index < len(*patternIn) {
+		switch (*patternIn)[*index] {
+		case ']':
+			retval.matchChars = string(chars[:])
+			return retval, nil
+		default:
+			chars = append(chars, (*patternIn)[*index])
+		}
+		(*index)++
+	}
+	return retval, errors.New("parse pattern not closed")
+}
+
 func ParsePattern(patternIn string) (MyRegExp, error) {
 	index := 0
-	parseSetPattern := func(inverted bool) (matchPoint, error) {
-		retval := matchPoint{}
-		retval.inverted = inverted
-		chars := []byte{}
-		for index < len(patternIn) {
-			switch patternIn[index] {
-			case ']':
-				retval.matchChars = string(chars[:])
-				return retval, nil
-			default:
-				chars = append(chars, patternIn[index])
-			}
-			index++
-		}
-		return retval, errors.New("parse pattern not closed")
-	}
 
-	pattern := []matchPoint{}
+	regex := MyRegExp{}
 	for index < len(patternIn) {
 		var err error
 		var p matchPoint
@@ -80,9 +81,9 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 			index++
 			if index < len(patternIn) && patternIn[index] == '^' {
 				index++
-				p, err = parseSetPattern(true)
+				p, err = parseSetPattern(true, &patternIn, &index)
 			} else {
-				p, err = parseSetPattern(false)
+				p, err = parseSetPattern(false, &patternIn, &index)
 			}
 			if err != nil {
 				os.Exit(3)
@@ -106,10 +107,10 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 		default:
 			p = matchPoint{matchChars: string(patternIn[index])}
 		}
-		pattern = append(pattern, p)
+		regex.mps = append(regex.mps, p)
 		index++
 	}
-	return MyRegExp{pattern}, nil
+	return regex, nil
 }
 
 func (pattern *MyRegExp) MatchLine(line []byte) (bool, error) {
