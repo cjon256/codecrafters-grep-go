@@ -53,27 +53,27 @@ func (mp *matchPoint) matchOnce(line []byte, current int) bool {
 	}
 }
 
-func parseSetPattern(inverted bool, patternIn *string, index *int) (matchPoint, error) {
+func parseSetPattern(inverted bool, pattern *string, index *int) (matchPoint, error) {
 	retval := matchPoint{}
 	retval.inverted = inverted
 	chars := []byte{}
-	for *index < len(*patternIn) {
-		switch (*patternIn)[*index] {
+	for *index < len(*pattern) {
+		switch (*pattern)[*index] {
 		case ']':
 			retval.matchChars = string(chars[:])
 			return retval, nil
 		default:
-			chars = append(chars, (*patternIn)[*index])
+			chars = append(chars, (*pattern)[*index])
 		}
 		(*index)++
 	}
 	return retval, errors.New("parse pattern not closed")
 }
 
-func ParsePattern(patternIn string) (MyRegExp, error) {
+func ParsePattern(pattern string) (MyRegExp, error) {
 	index := 0
 	regex := MyRegExp{}
-	if patternIn[index] == '^' {
+	if pattern[index] == '^' {
 		regex.matchStart = true
 		index++
 	}
@@ -81,28 +81,28 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 	for index < len(patternIn) {
 		var err error
 		var p matchPoint
-		switch patternIn[index] {
+		switch pattern[index] {
 		case '[':
 			index++
-			if index < len(patternIn) && patternIn[index] == '^' {
+			if index < limit && pattern[index] == '^' {
 				index++
-				p, err = parseSetPattern(true, &patternIn, &index)
+				p, err = parseSetPattern(true, &pattern, &index)
 			} else {
-				p, err = parseSetPattern(false, &patternIn, &index)
+				p, err = parseSetPattern(false, &pattern, &index)
 			}
 			if err != nil {
 				os.Exit(3)
 			}
 		case '\\':
 			index++
-			if index < len(patternIn) {
-				switch patternIn[index] {
+			if index < len(pattern) {
+				switch pattern[index] {
 				case 'w':
 					p = matchPoint{matchChars: wordChars}
 				case 'd':
 					p = matchPoint{matchChars: digits}
 				default:
-					p = matchPoint{matchChars: string(patternIn[index])}
+					p = matchPoint{matchChars: string(pattern[index])}
 				}
 			} else {
 				// last character was a backslash....
@@ -110,7 +110,7 @@ func ParsePattern(patternIn string) (MyRegExp, error) {
 				p = matchPoint{matchChars: "\\"}
 			}
 		default:
-			p = matchPoint{matchChars: string(patternIn[index])}
+			p = matchPoint{matchChars: string(pattern[index])}
 		}
 		regex.mps = append(regex.mps, p)
 		index++
