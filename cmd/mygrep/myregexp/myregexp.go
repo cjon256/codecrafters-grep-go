@@ -16,6 +16,7 @@ var (
 type MyRegExp struct {
 	mps        []matchPoint
 	matchStart bool
+	matchEnd   bool
 }
 
 type matchPoint struct {
@@ -23,22 +24,28 @@ type matchPoint struct {
 	inverted   bool
 }
 
-func (re MyRegExp) matchHere(line []byte, current int) bool {
+func (re *MyRegExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.mps); i++ {
 		if current >= len(line) {
 			fmt.Fprintln(os.Stderr, "oops, got to long")
 			return false
 		}
-		if !re.mps[i].matchOnce(line, current) {
+		matches, bytesUsed := re.mps[i].matchOnce(line, current)
+		if !matches {
 			fmt.Fprintln(os.Stderr, "match fails in regExp::matchHere")
 			return false
 		}
-		current++
+		current += bytesUsed
 	}
+	if re.matchEnd && current != len(line) {
+		fmt.Fprintf(os.Stderr, "Not at end despite match otherwise\n")
+		return false
+	}
+
 	return true
 }
 
-func (mp *matchPoint) matchOnce(line []byte, current int) bool {
+func (mp *matchPoint) matchOnce(line []byte, current int) (bool, int) {
 	matches := strings.Contains(mp.matchChars, string((line)[current]))
 	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
 	if mp.inverted {
@@ -46,10 +53,10 @@ func (mp *matchPoint) matchOnce(line []byte, current int) bool {
 	}
 	if matches {
 		// fmt.Fprintln("matches")
-		return true
+		return true, 1
 	} else {
 		// fmt.Fprintln("fails")
-		return false
+		return false, 0
 	}
 }
 
@@ -78,7 +85,14 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 		index++
 	}
 
-	for index < len(patternIn) {
+	limit := len(pattern)
+	if pattern[limit-1] == '$' {
+		fmt.Fprintf(os.Stderr, "matched $ at end: %s\n", pattern)
+		limit--
+		regex.matchEnd = true
+	}
+
+	for index < limit {
 		var err error
 		var p matchPoint
 		switch pattern[index] {
@@ -95,7 +109,7 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 			}
 		case '\\':
 			index++
-			if index < len(pattern) {
+			if index < limit {
 				switch pattern[index] {
 				case 'w':
 					p = matchPoint{matchChars: wordChars}
