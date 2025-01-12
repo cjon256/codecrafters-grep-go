@@ -22,20 +22,19 @@ type MyRegExp struct {
 type matchPoint struct {
 	matchChars string
 	inverted   bool
+	oneOrMore  bool
 }
 
-func (re *MyRegExp) matchHere(line []byte, current int) bool {
+func (re MyRegExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.mps); i++ {
 		if current >= len(line) {
 			fmt.Fprintln(os.Stderr, "oops, got to long")
 			return false
 		}
-		matches, bytesUsed := re.mps[i].matchOnce(line, current)
-		if !matches {
+		if !re.mps[i].match(line, &current) {
 			fmt.Fprintln(os.Stderr, "match fails in regExp::matchHere")
 			return false
 		}
-		current += bytesUsed
 	}
 	if re.matchEnd && current != len(line) {
 		fmt.Fprintf(os.Stderr, "Not at end despite match otherwise\n")
@@ -45,18 +44,52 @@ func (re *MyRegExp) matchHere(line []byte, current int) bool {
 	return true
 }
 
-func (mp *matchPoint) matchOnce(line []byte, current int) (bool, int) {
-	matches := strings.Contains(mp.matchChars, string((line)[current]))
+func (mp *matchPoint) matchOnce(line []byte, current *int) bool {
+	matches := strings.Contains(mp.matchChars, string((line)[*current]))
 	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
 	if mp.inverted {
 		matches = !matches
 	}
 	if matches {
 		// fmt.Fprintln("matches")
-		return true, 1
+		*current++
+		return true
 	} else {
 		// fmt.Fprintln("fails")
-		return false, 0
+		return false
+	}
+}
+
+func (mp *matchPoint) matchOneOrMore(line []byte, current *int) bool {
+	overallMatch := false
+	count := 0
+	for {
+		matches := strings.Contains(mp.matchChars, string((line)[*current]))
+		fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
+		if mp.inverted {
+			matches = !matches
+		}
+		if matches {
+			count++
+			fmt.Fprintf(os.Stderr, "%d matches\n", count)
+			*current++
+			overallMatch = true
+		} else {
+			fmt.Fprintf(os.Stderr, "End with %d matches\n", count)
+
+			return overallMatch
+		}
+		if *current >= len(line) {
+			return overallMatch
+		}
+	}
+}
+
+func (mp matchPoint) match(line []byte, current *int) bool {
+	if mp.oneOrMore {
+		return mp.matchOneOrMore(line, current)
+	} else {
+		return mp.matchOnce(line, current)
 	}
 }
 
@@ -92,9 +125,9 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 		regex.matchEnd = true
 	}
 
+	var p matchPoint
 	for index < limit {
 		var err error
-		var p matchPoint
 		switch pattern[index] {
 		case '[':
 			index++
@@ -106,6 +139,17 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 			}
 			if err != nil {
 				os.Exit(3)
+			}
+		case '+':
+			if len(regex.mps) == 0 {
+				// handle + at start of string I guess...
+				fmt.Fprintf(os.Stderr, "plus at start %v+??\n", p)
+				p = matchPoint{matchChars: string(pattern[index])}
+			} else {
+				// set the last mp to be one or more...
+				regex.mps[len(regex.mps)-1].oneOrMore = true
+				index++
+				continue
 			}
 		case '\\':
 			index++
