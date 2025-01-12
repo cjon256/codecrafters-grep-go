@@ -20,22 +20,22 @@ func main() {
 	}
 
 	pattern := os.Args[2]
-
-	line, err := io.ReadAll(os.Stdin) // assume we're only dealing with a single line
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: read input text: %v\n", err)
-		os.Exit(2)
-	}
-	regex, err := parsePattern(pattern)
+	regex, err := ParsePattern(pattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
 	}
 
 	fmt.Fprintf(os.Stderr, "regex = '%+v'\n", regex)
+
+	line, err := io.ReadAll(os.Stdin) // assume we're only dealing with a single line
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: read input text: %v\n", err)
+		os.Exit(2)
+	}
 	fmt.Fprintf(os.Stderr, "line = '%s'\n", line)
 
-	matched, err := matchLine(line, regex)
+	matched, err := MatchLine(line, regex)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
@@ -56,7 +56,7 @@ var (
 	wordChars = alpha + strings.ToUpper(alpha) + digits + "_"
 )
 
-type regExp struct {
+type MyRegExp struct {
 	pattern []matchPoint
 }
 
@@ -65,7 +65,7 @@ type matchPoint struct {
 	inverted   bool
 }
 
-func (re regExp) matchHere(line []byte, current int) bool {
+func (re MyRegExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.pattern); i++ {
 		if current >= len(line) {
 			fmt.Fprintln(os.Stderr, "oops, got to long")
@@ -95,7 +95,7 @@ func (mp *matchPoint) matchOnce(line []byte, current int) bool {
 	}
 }
 
-func parsePattern(patternIn string) (regExp, error) {
+func ParsePattern(patternIn string) (MyRegExp, error) {
 	index := 0
 	parseSetPattern := func(inverted bool) (matchPoint, error) {
 		retval := matchPoint{}
@@ -152,10 +152,10 @@ func parsePattern(patternIn string) (regExp, error) {
 		}
 		index++
 	}
-	return regExp{pattern}, nil
+	return MyRegExp{pattern}, nil
 }
 
-func matchLine(line []byte, pattern regExp) (bool, error) {
+func MatchLine(line []byte, pattern MyRegExp) (bool, error) {
 	for current := 0; current < len(line); current++ {
 		matchesHere := pattern.matchHere(line, current)
 		if matchesHere {
