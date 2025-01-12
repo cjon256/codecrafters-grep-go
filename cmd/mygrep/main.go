@@ -26,8 +26,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: read input text: %v\n", err)
 		os.Exit(2)
 	}
+	regex, err := parsePattern(pattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(2)
+	}
 
-	matched, err := matchLine(line, pattern)
+	fmt.Fprintf(os.Stderr, "regex = '%+v'\n", regex)
+	fmt.Fprintf(os.Stderr, "line = '%s'\n", line)
+
+	matched, err := matchLine(line, regex)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
@@ -147,16 +155,7 @@ func parsePattern(patternIn string) (regExp, error) {
 	return regExp{pattern}, nil
 }
 
-func matchLine(line []byte, patternIn string) (bool, error) {
-	pattern, err := parsePattern(patternIn)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(2)
-	}
-
-	fmt.Fprintf(os.Stderr, "%+v\n", pattern)
-	fmt.Fprintf(os.Stderr, "%s\n", line)
-
+func matchLine(line []byte, pattern regExp) (bool, error) {
 	for current := 0; current < len(line); current++ {
 		matchesHere := pattern.matchHere(line, current)
 		if matchesHere {
