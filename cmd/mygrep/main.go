@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"internal/myregexp"
 	"io"
 	"os"
+
+	"github.com/codecrafters-io/grep-starter-go/cmd/mygrep/myregexp"
 )
 
 // Usage: echo <input_text> | your_program.sh -E <pattern>
