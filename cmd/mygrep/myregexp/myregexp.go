@@ -60,7 +60,7 @@ func (re MyRegExp) matchHere(line []byte, current int) bool {
 
 func (mp *matchPoint) matchOnce(line []byte, current *int) bool {
 	matches := strings.Contains(mp.matchChars, string((line)[*current]))
-	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
+	fmt.Fprintf(os.Stderr, "matchOnce(line='%s', current=%d) with mp = '%v+'\n", string(line), *current, mp)
 	if mp.inverted {
 		matches = !matches
 	}
@@ -76,7 +76,7 @@ func (mp *matchPoint) matchOnce(line []byte, current *int) bool {
 
 func (mp *matchPoint) matchZeroOrOne(line []byte, current *int) bool {
 	matches := strings.Contains(mp.matchChars, string((line)[*current]))
-	fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
+	fmt.Fprintf(os.Stderr, "matchZeroOrOne(line='%s', current=%d) with mp = '%v+'\n", string(line), *current, mp)
 	if mp.inverted {
 		matches = !matches
 	}
@@ -95,7 +95,7 @@ func (mp *matchPoint) matchOneOrMore(line []byte, current *int) bool {
 	count := 0
 	for {
 		matches := strings.Contains(mp.matchChars, string((line)[*current]))
-		fmt.Fprintf(os.Stderr, "matchHere(line='%s', current=%d) with mp = '%v+'\n", string(line), current, mp)
+		fmt.Fprintf(os.Stderr, "matchOneOrMore(line='%s', current=%d) with mp = '%v+'\n", string(line)[*current:], *current, mp)
 		if mp.inverted {
 			matches = !matches
 		}
@@ -116,11 +116,12 @@ func (mp *matchPoint) matchOneOrMore(line []byte, current *int) bool {
 }
 
 func (mp matchPoint) match(line []byte, current *int) bool {
-	if mp.wildtype == oneOrMore {
+	switch mp.wildtype {
+	case oneOrMore:
 		return mp.matchOneOrMore(line, current)
-	} else if mp.wildtype == zeroOrOne {
+	case zeroOrOne:
 		return mp.matchZeroOrOne(line, current)
-	} else {
+	default:
 		return mp.matchOnce(line, current)
 	}
 }
@@ -194,6 +195,8 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 				index++
 				continue // don't add a matchPoint
 			}
+		case '.':
+			p = matchPoint{"", true, normal}
 		case '\\':
 			index++
 			if index < limit {
