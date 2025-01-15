@@ -32,12 +32,7 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "line = '%s'\n", line)
 
-	matched, err := regex.MatchLine(line)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(2)
-	}
-
+	matched := regex.MatchLine(line)
 	if matched {
 		fmt.Fprintln(os.Stderr, "whole matched")
 		os.Exit(0)

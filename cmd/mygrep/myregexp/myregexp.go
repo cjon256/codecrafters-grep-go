@@ -212,7 +212,7 @@ func ParsePattern(pattern string) (MyRegExp, error) {
 	return regex, nil
 }
 
-func (re *MyRegExp) MatchLine(line []byte) (bool, error) {
+func (re *MyRegExp) MatchLine(line []byte) bool {
 	limit := len(line)
 	if re.matchStart {
 		limit = 1
@@ -221,10 +221,10 @@ func (re *MyRegExp) MatchLine(line []byte) (bool, error) {
 		matchesHere := re.matchHere(line, current, 0)
 		if matchesHere {
 			fmt.Fprintln(os.Stderr, "ml whole matched")
-			return true, nil
+			return true
 		}
 	}
 
 	fmt.Fprintln(os.Stderr, "ml whole fails")
-	return false, nil
+	return false
 }
