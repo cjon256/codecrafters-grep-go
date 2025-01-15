@@ -38,7 +38,7 @@ type matchPoint struct {
 func (re MyRegExp) matchHere(line []byte, current int) bool {
 	for i := 0; i < len(re.mps); i++ {
 		if current >= len(line) {
-			fmt.Fprintln(os.Stderr, "oops, at the end...\n")
+			fmt.Fprintln(os.Stderr, "at the end...")
 			if re.mps[i].wildtype == zeroOrOne {
 				continue
 			}
