@@ -54,7 +54,7 @@ func (re MyRegExp) matchHere(line []byte, current int, rdx int) bool {
 		// ah, matchEnd was set so we succeed if at end and fail if not...
 		atEnd := current == len(line)
 		if !atEnd {
-			fmt.Fprintln(os.Stderr, "match fails in regExp::matchHere")
+			fmt.Fprintln(os.Stderr, "match fails because not at end$")
 		}
 		return atEnd
 	}
@@ -115,30 +115,6 @@ func (re MyRegExp) matchOneOrMore(line []byte, current int, rdx int) bool {
 	}
 	return false
 }
-
-// 	overallMatch := false
-// 	count := 0
-// 	for {
-// 		matches := strings.Contains(mp.matchChars, string((line)[*current]))
-// 		fmt.Fprintf(os.Stderr, "matchOneOrMore(line='%s', current=%d) with mp = '%v+'\n", string(line)[*current:], *current, mp)
-// 		if mp.inverted {
-// 			matches = !matches
-// 		}
-// 		if matches {
-// 			count++
-// 			fmt.Fprintf(os.Stderr, "%d matches\n", count)
-// 			*current++
-// 			overallMatch = true
-// 		} else {
-// 			fmt.Fprintf(os.Stderr, "End with %d matches\n", count)
-//
-// 			return overallMatch
-// 		}
-// 		if *current >= len(line) {
-// 			return overallMatch
-// 		}
-// 	}
-// }
 
 func parseSetPattern(inverted bool, pattern *string, index *int) (matchPoint, error) {
 	retval := matchPoint{}
