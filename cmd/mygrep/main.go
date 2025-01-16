@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/codecrafters-io/grep-starter-go/cmd/mygrep/myregexp"
+	"github.com/codecrafters-io/grep-starter-go/cmd/mygrep/regexp"
 )
 
 // Usage: echo <input_text> | your_program.sh -E <pattern>
@@ -16,13 +16,9 @@ func main() {
 	}
 
 	pattern := os.Args[2]
-	regex, err := myregexp.ParsePattern(pattern)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(2)
-	}
-
+	regex := regexp.ParseRegExp(pattern)
 	fmt.Fprintf(os.Stderr, "regex = '%+v'\n", regex)
+	os.Exit(0)
 
 	// XXX ReadAll assumes we're only dealing with a single line
 	line, err := io.ReadAll(os.Stdin)
