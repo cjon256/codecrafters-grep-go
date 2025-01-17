@@ -41,7 +41,11 @@ const (
 
 type Color int
 
-type matchPoint struct {
+type matchPoint interface {
+	buildElement
+}
+
+type basicMatchPoint struct {
 	matchChars string
 	inverted   bool
 	wildtype   wildcard
@@ -52,15 +56,15 @@ func (re RegExp) String() string {
 	return fmt.Sprintf("#[RegExp: '%s' %v %v]", re.mps, re.matchStart, re.matchEnd)
 }
 
-func (mp matchPoint) String() string {
+func (mp basicMatchPoint) String() string {
 	if mp.next == nil {
-		return fmt.Sprintf("#[matchPoint: '%s' %v %v nil]", mp.matchChars, mp.inverted, mp.wildtype)
+		return fmt.Sprintf("#[basicMatchPoint: '%s' %v %v nil]", mp.matchChars, mp.inverted, mp.wildtype)
 	}
-	remainder := fmt.Sprintf("%s", mp.next)
-	return fmt.Sprintf("#[matchPoint: '%s' %v %v %s]", mp.matchChars, mp.inverted, mp.wildtype, remainder)
+	remainder := mp.next.String()
+	return fmt.Sprintf("#[basicMatchPoint: '%s' %v %v %s]", mp.matchChars, mp.inverted, mp.wildtype, remainder)
 }
 
-func (mp matchPoint) matchByte(c byte) bool {
+func (mp basicMatchPoint) matchByte(c byte) bool {
 	matches := strings.Contains(mp.matchChars, string(c))
 	if mp.inverted {
 		matches = !matches
@@ -68,22 +72,23 @@ func (mp matchPoint) matchByte(c byte) bool {
 	return matches
 }
 
-func (mp matchPoint) matchHere(line []byte, ldx int) bool {
-	fmt.Fprintf(os.Stderr, "matchPoint.matchHere('%s', %d\n", string(line)[ldx:], ldx)
+func (mp basicMatchPoint) matchHere(line []byte, ldx int) bool {
+	fmt.Fprintf(os.Stderr, "basicMatchPoint.matchHere('%s', %d\n", string(line)[ldx:], ldx)
 	return true
 }
 
-func (mp *matchPoint) setNext(n regExpElement) {
+func (mp *basicMatchPoint) setNext(n regExpElement) {
 	mp.next = n
 }
 
-func (mp *matchPoint) setWildtype(w wildcard) {
+func (mp *basicMatchPoint) setWildtype(w wildcard) {
 	mp.wildtype = w
 }
 
 var (
-	_ regExpElement = &matchPoint{}
-	_ buildElement  = &matchPoint{}
+	_ matchPoint    = &basicMatchPoint{}
+	_ regExpElement = &basicMatchPoint{}
+	_ buildElement  = &basicMatchPoint{}
 )
 
 func (re RegExp) matchHere(line []byte, current int, rdx int) bool {
@@ -213,8 +218,8 @@ func ParseRegExp(pattern string) RegExp {
 	return regex
 }
 
-func parseSetPattern(inverted bool, pattern *string, index *int) (*matchPoint, error) {
-	retval := matchPoint{}
+func parseSetPattern(inverted bool, pattern *string, index *int) (matchPoint, error) {
+	retval := basicMatchPoint{}
 	retval.inverted = inverted
 	chars := []byte{}
 	for *index < len(*pattern) {
@@ -232,7 +237,7 @@ func parseSetPattern(inverted bool, pattern *string, index *int) (*matchPoint, e
 
 func ParsePattern(pattern string, start int) regExpElement {
 	regex := []buildElement{}
-	var p *matchPoint
+	var p matchPoint
 	for index := start; index < len(pattern); {
 		var err error
 		switch pattern[index] {
@@ -251,7 +256,7 @@ func ParsePattern(pattern string, start int) regExpElement {
 			if len(regex) == 0 {
 				// handle + at start of string I guess...
 				fmt.Fprintf(os.Stderr, "questionmark at start %v+??\n", p)
-				p = &matchPoint{matchChars: string(pattern[index])}
+				p = &basicMatchPoint{matchChars: string(pattern[index])}
 			} else {
 				// set the last mp to be one or more...
 				regex[len(regex)-1].setWildtype(zeroOrOne)
@@ -262,7 +267,7 @@ func ParsePattern(pattern string, start int) regExpElement {
 			if len(regex) == 0 {
 				// handle + at start of string I guess...
 				fmt.Fprintf(os.Stderr, "plus at start %v+??\n", p)
-				p = &matchPoint{matchChars: string(pattern[index])}
+				p = &basicMatchPoint{matchChars: string(pattern[index])}
 			} else {
 				// set the last mp to be one or more...
 				regex[len(regex)-1].setWildtype(oneOrMore)
@@ -273,7 +278,7 @@ func ParsePattern(pattern string, start int) regExpElement {
 			if len(regex) == 0 {
 				// handle * at start of string I guess...
 				fmt.Fprintf(os.Stderr, "asterisk at start %v+??\n", p)
-				p = &matchPoint{matchChars: string(pattern[index])}
+				p = &basicMatchPoint{matchChars: string(pattern[index])}
 			} else {
 				// set the last mp to be one or more...
 				regex[len(regex)-1].setWildtype(zeroOrMore)
@@ -281,25 +286,25 @@ func ParsePattern(pattern string, start int) regExpElement {
 				continue // don't add a matchPoint
 			}
 		case '.':
-			p = &matchPoint{"", true, normal, nil}
+			p = &basicMatchPoint{"", true, normal, nil}
 		case '\\':
 			index++
 			if index < len(pattern) {
 				switch pattern[index] {
 				case 'w':
-					p = &matchPoint{matchChars: wordChars}
+					p = &basicMatchPoint{matchChars: wordChars}
 				case 'd':
-					p = &matchPoint{matchChars: digits}
+					p = &basicMatchPoint{matchChars: digits}
 				default:
-					p = &matchPoint{matchChars: string(pattern[index])}
+					p = &basicMatchPoint{matchChars: string(pattern[index])}
 				}
 			} else {
 				// last character was a backslash....
 				// I guess append a backslash character?
-				p = &matchPoint{matchChars: "\\"}
+				p = &basicMatchPoint{matchChars: "\\"}
 			}
 		default:
-			p = &matchPoint{matchChars: string(pattern[index])}
+			p = &basicMatchPoint{matchChars: string(pattern[index])}
 		}
 		regex = append(regex, p)
 		index++
