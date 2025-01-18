@@ -26,7 +26,6 @@ type regExpElement interface {
 type buildElement interface {
 	regExpElement
 	setNext(regExpElement)
-	setWildtype(wildcard)
 }
 
 type matchPoint interface {
@@ -36,8 +35,15 @@ type matchPoint interface {
 type basicMatchPoint struct {
 	MatchChars string
 	Inverted   bool
-	Wildtype   wildcard
 	Next       regExpElement
+}
+
+type oneOrMoreMatchPoint struct {
+	basicMatchPoint
+}
+
+type zeroOrMoreMatchPoint struct {
+	basicMatchPoint
 }
 
 type zeroOrOneMatchPoint struct {
@@ -50,33 +56,7 @@ func (e matchEndMatchPoint) setNext(_ regExpElement) {
 	// should exit as this would be a clear error?
 }
 
-func (e matchEndMatchPoint) String() string {
-	return "[matchEnd]"
-}
-
-func (e matchEndMatchPoint) matchHere(line []byte, ldx int) bool {
-	atEnd := ldx == len(line)
-	if atEnd {
-		fmt.Fprintf(os.Stderr, "Matched at end and regexp has $\n")
-		return true
-	}
-	fmt.Fprintf(os.Stderr, "Not at end and regexp has $\n")
-	return false
-}
-
-func (e matchEndMatchPoint) setWildtype(_ wildcard) {
-}
-
 var _ buildElement = matchEndMatchPoint{}
-
-type wildcard int
-
-const (
-	normal wildcard = iota
-	oneOrMore
-	zeroOrOne
-	zeroOrMore
-)
 
 type Color int
 
@@ -84,12 +64,34 @@ func (re RegExp) String() string {
 	return fmt.Sprintf("#[RegExp: '%s' %v]", re.mps, re.matchStart)
 }
 
-func (mp basicMatchPoint) String() string {
+func (mp basicMatchPoint) basicString(mytype string) string {
+	var remainder string
 	if mp.Next == nil {
-		return fmt.Sprintf("#[basicMatchPoint: '%s' %v %v nil]", mp.MatchChars, mp.Inverted, mp.Wildtype)
+		remainder = "nil"
+	} else {
+		remainder = mp.Next.String()
 	}
-	remainder := mp.Next.String()
-	return fmt.Sprintf("#[basicMatchPoint: '%s' %v %v %s]", mp.MatchChars, mp.Inverted, mp.Wildtype, remainder)
+	return fmt.Sprintf("#[%s: '%s' %v %s]", mytype, mp.MatchChars, mp.Inverted, remainder)
+}
+
+func (mp basicMatchPoint) String() string {
+	return mp.basicString("basicMatchPoint")
+}
+
+func (mp oneOrMoreMatchPoint) String() string {
+	return mp.basicString("oneOrMoreMatchPoint")
+}
+
+func (mp zeroOrMoreMatchPoint) String() string {
+	return mp.basicString("zeroOrMoreMatchPoint")
+}
+
+func (mp zeroOrOneMatchPoint) String() string {
+	return mp.basicString("zeroOrOneMatchPoint")
+}
+
+func (e matchEndMatchPoint) String() string {
+	return "[matchEnd]"
 }
 
 func (mp basicMatchPoint) matchByte(c byte) bool {
@@ -104,10 +106,6 @@ func (mp *basicMatchPoint) setNext(n regExpElement) {
 	mp.Next = n
 }
 
-func (mp *basicMatchPoint) setWildtype(w wildcard) {
-	mp.Wildtype = w
-}
-
 var (
 	_ matchPoint    = &basicMatchPoint{}
 	_ regExpElement = &basicMatchPoint{}
@@ -116,55 +114,57 @@ var (
 
 func (re RegExp) matchHere(line []byte, ldx int) bool {
 	fmt.Fprintf(os.Stderr, "matchHere(line='%s', ", string(line)[ldx:])
-	fmt.Fprintf(os.Stderr, "current=%d)\n", ldx)
+	fmt.Fprintf(os.Stderr, "lbx=%d)\n", ldx)
 	return re.mps.matchHere(line, ldx)
 }
 
 func (mp basicMatchPoint) matchHere(line []byte, ldx int) bool {
-	fmt.Fprintf(os.Stderr, "basicMatchPoint.matchHere('%s', %d\n", string(line)[ldx:], ldx)
+	fmt.Fprintf(os.Stderr, "mp=%#v\n", mp)
+	fmt.Fprintf(os.Stderr, "basicMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
 	if ldx >= len(line) {
-		fmt.Fprintln(os.Stderr, "at the end...")
-		// ah, we're at the end of the string but not the end of the regexp
-		// but we might still match if all the remaining items can be zero length
-		if mp.Wildtype == zeroOrOne {
-			if mp.Next == nil {
-				return true
-			}
-			return mp.Next.matchHere(line, ldx)
-		}
 		fmt.Fprintln(os.Stderr, "oops, got to long")
 		return false
 	}
-	switch mp.Wildtype {
-	case oneOrMore:
-		return mp.matchOneOrMore(line, ldx)
-	case zeroOrOne:
-		return mp.matchZeroOrOne(line, ldx)
-	case zeroOrMore:
-		return mp.matchZeroOrMore(line, ldx)
-	default:
-		if !mp.matchByte(line[ldx]) {
-			return false
-		}
-		if mp.Next == nil {
-			return true
-		}
-		return mp.Next.matchHere(line, ldx+1)
+	if !mp.matchByte(line[ldx]) {
+		fmt.Fprintln(os.Stderr, "no match")
+		return false
 	}
-}
-
-func (mp basicMatchPoint) matchZeroOrOne(line []byte, ldx int) bool {
 	if mp.Next == nil {
+		fmt.Fprintln(os.Stderr, "finished matching")
 		return true
 	}
+	return mp.Next.matchHere(line, ldx+1)
+}
+
+func (mp zeroOrOneMatchPoint) matchHere(line []byte, ldx int) bool {
+	fmt.Fprintf(os.Stderr, "mp=%#v\n", mp)
+	fmt.Fprintf(os.Stderr, "zeroOrOneMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.Next == nil {
+		fmt.Fprintln(os.Stderr, "short circuit match")
+		return true
+	}
+	if ldx >= len(line) {
+		fmt.Fprintln(os.Stderr, "at end, so trying zero length")
+		return mp.Next.matchHere(line, ldx)
+	}
 	if !mp.matchByte(line[ldx]) {
+		fmt.Fprintln(os.Stderr, "no match, so trying zero length")
 		return mp.Next.matchHere(line, ldx)
 	}
 	return mp.Next.matchHere(line, ldx+1)
 }
 
-func (mp basicMatchPoint) matchZeroOrMore(line []byte, ldx int) bool {
-	fmt.Fprintf(os.Stderr, "matchOneOrMore(line='%s', current=%d) with mp = '%v+'\n", string(line)[ldx:], ldx, mp)
+func (mp zeroOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
+	fmt.Fprintf(os.Stderr, "mp=%#v\n", mp)
+	fmt.Fprintf(os.Stderr, "zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.Next == nil {
+		fmt.Fprintln(os.Stderr, "short circuit match")
+		return true
+	}
+	if ldx >= len(line) {
+		fmt.Fprintln(os.Stderr, "at end, so trying zero length")
+		return mp.Next.matchHere(line, ldx)
+	}
 	// finding max length that will match and then working backwards
 	maxLength := 0
 	for ; maxLength+ldx < len(line); maxLength++ {
@@ -177,9 +177,6 @@ func (mp basicMatchPoint) matchZeroOrMore(line []byte, ldx int) bool {
 	// here is the working backwards
 	for trialLength := maxLength; trialLength >= 0; trialLength-- {
 		fmt.Fprintf(os.Stderr, "trialLength: %d\n", trialLength)
-		if mp.Next == nil {
-			return true
-		}
 		if mp.Next.matchHere(line, ldx+trialLength) {
 			return true
 		}
@@ -187,30 +184,50 @@ func (mp basicMatchPoint) matchZeroOrMore(line []byte, ldx int) bool {
 	return false
 }
 
-func (mp basicMatchPoint) matchOneOrMore(line []byte, current int) bool {
-	fmt.Fprintf(os.Stderr, "matchOneOrMore(line='%s', current=%d) with mp = '%v+'\n", string(line)[current:], current, mp)
-	if !mp.matchByte(line[current]) {
+func (mp oneOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
+	fmt.Fprintf(os.Stderr, "mp=%#v\n", mp)
+	fmt.Fprintf(os.Stderr, "zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.Next == nil {
+		fmt.Fprintln(os.Stderr, "short circuit match")
+		return true
+	}
+	if ldx >= len(line) {
+		fmt.Fprintln(os.Stderr, "at end, so trying zero length")
+		return mp.Next.matchHere(line, ldx)
+	}
+	// need at least one
+	if !mp.matchByte(line[ldx]) {
+		fmt.Fprintln(os.Stderr, "no match")
 		return false
 	}
 	// finding max length that will match and then working backwards
 	maxLength := 1
-	for ; maxLength+current < len(line); maxLength++ {
-		if !mp.matchByte(line[maxLength+current]) {
+	for ; maxLength+ldx < len(line); maxLength++ {
+		if !mp.matchByte(line[maxLength+ldx]) {
 			// keep incrementing until we fail to match or hit the end
 			break
 		}
 	}
 	fmt.Fprintf(os.Stderr, "maxLength: %d\n", maxLength)
 	// here is the working backwards
-	for trialLength := maxLength; trialLength > 0; trialLength-- {
+	for trialLength := maxLength; trialLength >= 0; trialLength-- {
 		fmt.Fprintf(os.Stderr, "trialLength: %d\n", trialLength)
-		if mp.Next == nil {
-			return true
-		}
-		if mp.Next.matchHere(line, current+trialLength) {
+		if mp.Next.matchHere(line, ldx+trialLength) {
 			return true
 		}
 	}
+	return false
+}
+
+func (e matchEndMatchPoint) matchHere(line []byte, ldx int) bool {
+	fmt.Fprintf(os.Stderr, "mp=%#v\n", e)
+	fmt.Fprintf(os.Stderr, "matchEndMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	atEnd := ldx == len(line)
+	if atEnd {
+		fmt.Fprintf(os.Stderr, "Matched at end and regexp has $\n")
+		return true
+	}
+	fmt.Fprintf(os.Stderr, "Not at end and regexp has $\n")
 	return false
 }
 
@@ -247,6 +264,15 @@ func parseSetPattern(inverted bool, pattern *string, index *int) (matchPoint, er
 	return &retval, errors.New("parse pattern not closed")
 }
 
+func makeBasicMatchPoint(b buildElement) *basicMatchPoint {
+	mp, ok := b.(*basicMatchPoint)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Problem parsing Regexp around a '?'\n")
+		os.Exit(3)
+	}
+	return mp
+}
+
 func ParsePattern(pattern string, start int) regExpElement {
 	regex := []buildElement{}
 	var p matchPoint
@@ -272,7 +298,8 @@ func ParsePattern(pattern string, start int) regExpElement {
 				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
 			} else {
 				// set the last mp to be one or more...
-				regex[len(regex)-1].setWildtype(zeroOrOne)
+				tmp := makeBasicMatchPoint(regex[len(regex)-1])
+				regex[len(regex)-1] = &zeroOrOneMatchPoint{*tmp}
 				rdx++
 				continue // don't add a matchPoint
 			}
@@ -284,7 +311,8 @@ func ParsePattern(pattern string, start int) regExpElement {
 				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
 			} else {
 				// set the last mp to be one or more...
-				regex[len(regex)-1].setWildtype(oneOrMore)
+				tmp := makeBasicMatchPoint(regex[len(regex)-1])
+				regex[len(regex)-1] = &oneOrMoreMatchPoint{*tmp}
 				rdx++
 				continue // don't add a matchPoint
 			}
@@ -295,8 +323,9 @@ func ParsePattern(pattern string, start int) regExpElement {
 				fmt.Fprintf(os.Stderr, "asterisk at start %v+??\n", p)
 				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
 			} else {
-				// set the last mp to be one or more...
-				regex[len(regex)-1].setWildtype(zeroOrMore)
+				// set the last tmp to be one or more...
+				tmp := makeBasicMatchPoint(regex[len(regex)-1])
+				regex[len(regex)-1] = &zeroOrMoreMatchPoint{*tmp}
 				rdx++
 				continue // don't add a matchPoint
 			}
@@ -309,7 +338,7 @@ func ParsePattern(pattern string, start int) regExpElement {
 			}
 
 		case '.':
-			p = &basicMatchPoint{"", true, normal, nil}
+			p = &basicMatchPoint{"", true, nil}
 
 		case '\\':
 			rdx++
