@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: read input text: %v\n", err)
 		os.Exit(2)
 	}
+	// trim any newline off of that in case we forget -n for echo
+	line = bytes.TrimRight(line, "\n\r")
 	debugf("line = '%s'\n", line)
 
 	matched := regex.MatchLine(line)
