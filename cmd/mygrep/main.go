@@ -9,13 +9,6 @@ import (
 	"github.com/codecrafters-io/grep-starter-go/cmd/mygrep/regexp"
 )
 
-// debugf convenience function
-func debugf(format string, args ...interface{}) {
-	if regexp.DEBUG {
-		fmt.Fprintf(os.Stderr, format, args...)
-	}
-}
-
 // Usage: echo <input_text> | your_program.sh -E <pattern>
 func main() {
 	if len(os.Args) < 3 || os.Args[1] != "-E" {
@@ -34,14 +27,11 @@ func main() {
 	}
 	// trim any newline off of that in case we forget -n for echo
 	line = bytes.TrimRight(line, "\n\r")
-	debugf("line = '%s'\n", line)
 
 	matched := regex.MatchLine(line)
 	if matched {
-		debugf("whole matched")
 		os.Exit(0)
 	} else {
-		debugf("whole fails")
 		os.Exit(1)
 	}
 }
