@@ -49,31 +49,26 @@ func ParseRegExp(pattern string) RegExp {
 }
 
 // called when we are inside a [abcd] pattern
-func parseSetPattern(inverted bool, pattern *string, index *int) (matchPoint, error) {
+func parseSetPattern(pattern *string, rdx *int) (*basicMatchPoint, error) {
 	retval := basicMatchPoint{}
+	inverted := false
+	if *rdx < len(*pattern) && (*pattern)[*rdx] == '^' {
+		*rdx++
+		inverted = true
+	}
 	retval.Inverted = inverted
 	chars := []byte{}
-	for *index < len(*pattern) {
-		switch (*pattern)[*index] {
+	for *rdx < len(*pattern) {
+		switch (*pattern)[*rdx] {
 		case ']':
 			retval.MatchChars = string(chars[:])
 			return &retval, nil
 		default:
-			chars = append(chars, (*pattern)[*index])
+			chars = append(chars, (*pattern)[*rdx])
 		}
-		(*index)++
+		(*rdx)++
 	}
 	return &retval, errors.New("parse pattern not closed")
-}
-
-// used when embedding a basicMatchPoint because it's followed by a ?+*
-func makeBasicMatchPoint(b matchPoint) *basicMatchPoint {
-	mp, ok := b.(*basicMatchPoint)
-	if !ok {
-		debugf("Problem parsing Regexp around a '?'\n")
-		os.Exit(3)
-	}
-	return mp
 }
 
 const (
@@ -84,91 +79,76 @@ const (
 
 // returns a linked list representing the regexp pattern
 func ParsePattern(pattern string, start int) matchPoint {
+	var rdx int
+	glob := func(mp *basicMatchPoint) matchPoint {
+		if rdx+1 >= len(pattern) {
+			debugf("regex glob: no glob, at end with '%s'\n", string(pattern[rdx]))
+			return mp
+		}
+		debugf("pattern='%s' rdx=%d\n", pattern, rdx)
+		switch pattern[rdx+1] {
+		case '?':
+			rdx++
+			debugf("regex glob: got '?'\n")
+			return &zeroOrOneMatchPoint{*mp}
+		case '+':
+			rdx++
+			debugf("regex glob: got '+'\n")
+			return &oneOrMoreMatchPoint{*mp}
+		case '*':
+			rdx++
+			debugf("regex glob: got '*'\n")
+			return &zeroOrMoreMatchPoint{*mp}
+		default:
+			debugf("regex glob: no glob, got '%s'\n", string(pattern[rdx+1]))
+			return mp
+		}
+	}
+
 	regex := []matchPoint{}
 	var p matchPoint
-	for rdx := start; rdx < len(pattern); {
+	for rdx = start; rdx < len(pattern); {
 		var err error
 		switch pattern[rdx] {
 		case '[':
 			rdx++
-			if rdx < len(pattern) && pattern[rdx] == '^' {
-				rdx++
-				p, err = parseSetPattern(true, &pattern, &rdx)
-			} else {
-				p, err = parseSetPattern(false, &pattern, &rdx)
-			}
+			var b *basicMatchPoint
+			b, err = parseSetPattern(&pattern, &rdx)
 			if err != nil {
 				os.Exit(3)
 			}
-
-		case '?':
-			if len(regex) == 0 {
-				// handle + at start of string I guess...
-				debugf("questionmark at start %v+??\n", p)
-				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
-			} else {
-				// set the last mp to be one or more...
-				tmp := makeBasicMatchPoint(regex[len(regex)-1])
-				regex[len(regex)-1] = &zeroOrOneMatchPoint{*tmp}
-				rdx++
-				continue // don't add a matchPoint
-			}
-
-		case '+':
-			if len(regex) == 0 {
-				// handle + at start of string I guess...
-				debugf("plus at start %v+??\n", p)
-				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
-			} else {
-				// set the last mp to be one or more...
-				tmp := makeBasicMatchPoint(regex[len(regex)-1])
-				regex[len(regex)-1] = &oneOrMoreMatchPoint{*tmp}
-				rdx++
-				continue // don't add a matchPoint
-			}
-
-		case '*':
-			if len(regex) == 0 {
-				// handle * at start of string I guess...
-				debugf("asterisk at start %v+??\n", p)
-				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
-			} else {
-				// set the last tmp to be one or more...
-				tmp := makeBasicMatchPoint(regex[len(regex)-1])
-				regex[len(regex)-1] = &zeroOrMoreMatchPoint{*tmp}
-				rdx++
-				continue // don't add a matchPoint
-			}
+			p = glob(b)
 
 		case '$':
 			if rdx == len(pattern)-1 {
 				p = &matchEndMatchPoint{}
 			} else {
-				p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
+				p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
 			}
 
 		case '.':
-			p = &basicMatchPoint{"", true, nil}
+			debugf("regex parse: got '.'\n")
+			p = glob(&basicMatchPoint{"", true, nil})
 
 		case '\\':
 			rdx++
 			if rdx < len(pattern) {
 				switch pattern[rdx] {
 				case 'w':
-					p = &basicMatchPoint{MatchChars: wordChars}
+					p = glob(&basicMatchPoint{MatchChars: wordChars})
 				case 'd':
-					p = &basicMatchPoint{MatchChars: digits}
+					p = glob(&basicMatchPoint{MatchChars: digits})
 				default:
-					p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
+					p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
 				}
 			} else {
 				// last character was a backslash....
 				// I guess append a backslash character?
-				p = &basicMatchPoint{MatchChars: "\\"}
+				p = glob(&basicMatchPoint{MatchChars: "\\"})
 			}
 
 		default:
-			p = &basicMatchPoint{MatchChars: string(pattern[rdx])}
+			p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
 		}
 		regex = append(regex, p)
 		rdx++
