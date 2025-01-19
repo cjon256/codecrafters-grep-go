@@ -88,6 +88,8 @@ const (
 // returns a linked list representing the regexp pattern
 func ParsePattern(pattern string, start int) matchPoint {
 	var rdx int
+	// handles ? + * characters when they glob
+	// will not be used if at start of line or after \
 	glob := func(mp *basicMatchPoint) matchPoint {
 		if rdx+1 >= len(pattern) {
 			debugf("regex glob: no glob, at end with '%s'\n", string(pattern[rdx]))
