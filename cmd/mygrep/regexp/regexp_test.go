@@ -47,6 +47,14 @@ var tests = []RegexInput{
 	{"digits_f", "apple", "\\d", false},
 	{"simple_t", "dog", "d", true},
 	{"simple_f", "dog", "f", false},
+
+	{"plus_t", "cart", "car+t", true},
+	{"plus_t", "carrrrrt", "car+t", true},
+	{"plus_f", "cat", "car+t", false},
+	{"star_t", "cart", "car*t", true},
+	{"star_t", "carrrrrt", "car*t", true},
+	{"star_t", "cat", "car*t", true},
+	{"star_f", "caat", "car*t", false},
 }
 
 func TestRegexTableDriven(t *testing.T) {
