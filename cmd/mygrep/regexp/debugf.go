@@ -6,7 +6,7 @@ import (
 )
 
 // DEBUG flag, set to true to enable debug mode
-const DEBUG bool = false
+var DEBUG bool = false
 
 // debugf convenience function
 func debugf(format string, args ...interface{}) {

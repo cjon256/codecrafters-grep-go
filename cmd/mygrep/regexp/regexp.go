@@ -51,7 +51,7 @@ func ParseRegExp(pattern string) RegExp {
 		pattern = pattern[1:]
 	}
 
-	regex.mps = ParsePattern(pattern, 0)
+	regex.mps = parsePattern(pattern, 0)
 	debugf("regex = '%+v'\n", regex)
 	return regex
 }
@@ -64,12 +64,12 @@ func parseSetPattern(pattern *string, rdx *int) (*basicMatchPoint, error) {
 		*rdx++
 		inverted = true
 	}
-	retval.Inverted = inverted
+	retval.inverted = inverted
 	chars := []byte{}
 	for *rdx < len(*pattern) {
 		switch (*pattern)[*rdx] {
 		case ']':
-			retval.MatchChars = string(chars[:])
+			retval.matchChars = string(chars[:])
 			return &retval, nil
 		default:
 			chars = append(chars, (*pattern)[*rdx])
@@ -86,7 +86,7 @@ const (
 )
 
 // returns a linked list representing the regexp pattern
-func ParsePattern(pattern string, start int) matchPoint {
+func parsePattern(pattern string, start int) matchPoint {
 	var rdx int
 	// handles ? + * characters when they glob
 	// will not be used if at start of line or after \
@@ -133,7 +133,7 @@ func ParsePattern(pattern string, start int) matchPoint {
 			if rdx == len(pattern)-1 {
 				p = &matchEndMatchPoint{}
 			} else {
-				p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
+				p = glob(&basicMatchPoint{matchChars: string(pattern[rdx])})
 			}
 
 		case '.':
@@ -145,20 +145,20 @@ func ParsePattern(pattern string, start int) matchPoint {
 			if rdx < len(pattern) {
 				switch pattern[rdx] {
 				case 'w':
-					p = glob(&basicMatchPoint{MatchChars: wordChars})
+					p = glob(&basicMatchPoint{matchChars: wordChars})
 				case 'd':
-					p = glob(&basicMatchPoint{MatchChars: digits})
+					p = glob(&basicMatchPoint{matchChars: digits})
 				default:
-					p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
+					p = glob(&basicMatchPoint{matchChars: string(pattern[rdx])})
 				}
 			} else {
 				// last character was a backslash....
 				// I guess append a backslash character?
-				p = glob(&basicMatchPoint{MatchChars: "\\"})
+				p = glob(&basicMatchPoint{matchChars: "\\"})
 			}
 
 		default:
-			p = glob(&basicMatchPoint{MatchChars: string(pattern[rdx])})
+			p = glob(&basicMatchPoint{matchChars: string(pattern[rdx])})
 		}
 		regex = append(regex, p)
 		rdx++

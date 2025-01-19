@@ -13,9 +13,9 @@ type matchPoint interface {
 }
 
 type basicMatchPoint struct {
-	MatchChars string
-	Inverted   bool
-	Next       matchPoint
+	matchChars string
+	inverted   bool
+	next       matchPoint
 }
 
 type oneOrMoreMatchPoint struct {
@@ -40,12 +40,12 @@ var (
 
 func (mp basicMatchPoint) recursiveString(mytype string) string {
 	var remainder string
-	if mp.Next == nil {
+	if mp.next == nil {
 		remainder = "nil"
 	} else {
-		remainder = mp.Next.String()
+		remainder = mp.next.String()
 	}
-	return fmt.Sprintf("#[%s: '%s' %v %s]", mytype, mp.MatchChars, mp.Inverted, remainder)
+	return fmt.Sprintf("#[%s: '%s' %v %s]", mytype, mp.matchChars, mp.inverted, remainder)
 }
 
 func (mp basicMatchPoint) String() string {
@@ -69,8 +69,8 @@ func (e matchEndMatchPoint) String() string {
 }
 
 func (mp basicMatchPoint) matchByte(c byte) bool {
-	matches := strings.Contains(mp.MatchChars, string(c))
-	if mp.Inverted {
+	matches := strings.Contains(mp.matchChars, string(c))
+	if mp.inverted {
 		matches = !matches
 	}
 	return matches
@@ -87,41 +87,41 @@ func (mp basicMatchPoint) matchHere(line []byte, ldx int) bool {
 		debugf("no match\n")
 		return false
 	}
-	if mp.Next == nil {
+	if mp.next == nil {
 		debugf("finished matching\n")
 		return true
 	}
-	return mp.Next.matchHere(line, ldx+1)
+	return mp.next.matchHere(line, ldx+1)
 }
 
 func (mp zeroOrOneMatchPoint) matchHere(line []byte, ldx int) bool {
 	debugf("mp=%#v\n", mp)
 	debugf("zeroOrOneMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
-	if mp.Next == nil {
+	if mp.next == nil {
 		debugf("short circuit match\n")
 		return true
 	}
 	if ldx >= len(line) {
 		debugf("at end, so trying zero length\n")
-		return mp.Next.matchHere(line, ldx)
+		return mp.next.matchHere(line, ldx)
 	}
 	if !mp.matchByte(line[ldx]) {
 		debugf("no match, so trying zero length\n")
-		return mp.Next.matchHere(line, ldx)
+		return mp.next.matchHere(line, ldx)
 	}
-	return mp.Next.matchHere(line, ldx+1)
+	return mp.next.matchHere(line, ldx+1)
 }
 
 func (mp zeroOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
 	debugf("mp=%#v\n", mp)
 	debugf("zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
-	if mp.Next == nil {
+	if mp.next == nil {
 		debugf("short circuit match\n")
 		return true
 	}
 	if ldx >= len(line) {
 		debugf("at end, so trying zero length\n")
-		return mp.Next.matchHere(line, ldx)
+		return mp.next.matchHere(line, ldx)
 	}
 	// finding max length that will match and then working backwards
 	maxLength := 0
@@ -135,7 +135,7 @@ func (mp zeroOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
 	// here is the working backwards
 	for trialLength := maxLength; trialLength >= 0; trialLength-- {
 		debugf("trialLength: %d\n", trialLength)
-		if mp.Next.matchHere(line, ldx+trialLength) {
+		if mp.next.matchHere(line, ldx+trialLength) {
 			return true
 		}
 	}
@@ -145,13 +145,13 @@ func (mp zeroOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
 func (mp oneOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
 	debugf("mp=%#v\n", mp)
 	debugf("zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
-	if mp.Next == nil {
+	if mp.next == nil {
 		debugf("short circuit match\n")
 		return true
 	}
 	if ldx >= len(line) {
 		debugf("at end, so trying zero length\n")
-		return mp.Next.matchHere(line, ldx)
+		return mp.next.matchHere(line, ldx)
 	}
 	// need at least one
 	if !mp.matchByte(line[ldx]) {
@@ -170,7 +170,7 @@ func (mp oneOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
 	// here is the working backwards
 	for trialLength := maxLength; trialLength >= 0; trialLength-- {
 		debugf("trialLength: %d\n", trialLength)
-		if mp.Next.matchHere(line, ldx+trialLength) {
+		if mp.next.matchHere(line, ldx+trialLength) {
 			return true
 		}
 	}
@@ -190,7 +190,7 @@ func (e matchEndMatchPoint) matchHere(line []byte, ldx int) bool {
 }
 
 func (mp *basicMatchPoint) setNext(n matchPoint) {
-	mp.Next = n
+	mp.next = n
 }
 
 func (e matchEndMatchPoint) setNext(_ matchPoint) {
