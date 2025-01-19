@@ -1,6 +1,7 @@
 package regexp
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -16,10 +17,17 @@ func (re RegExp) String() string {
 }
 
 func (re *RegExp) MatchLine(line []byte) bool {
+	// trim any newline off of that in case we forget -n for echo
+	line = bytes.TrimRight(line, "\n\r")
+
 	debugf("line='%s'\n", line)
 	if re.matchStart {
-		debugf("whole matched\n")
-		return re.mps.matchHere(line, 0)
+		matched := re.mps.matchHere(line, 0)
+		if matched {
+			debugf("whole matched\n")
+			return true
+		}
+		return false
 	}
 	for ldx := 0; ldx < len(line); ldx++ {
 		if re.mps.matchHere(line, ldx) {
