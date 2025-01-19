@@ -5,7 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 )
+
+///////////////////////////////////////////////////////////
+// A useful function for debugging
+
+// DEBUG flag, set to true to enable debug mode
+var DEBUG bool = false
+
+// debugf convenience function
+func debugf(format string, args ...interface{}) {
+	if DEBUG {
+		fmt.Fprintf(os.Stderr, format, args...)
+	}
+}
+
+///////////////////////////////////////////////////////////
+// RegExp class and constructor function for it
 
 type RegExp struct {
 	mps        matchPoint
@@ -171,4 +188,203 @@ func parsePattern(pattern string, start int) matchPoint {
 		regex[i].setNext(regex[i+1])
 	}
 	return regex[0]
+}
+
+///////////////////////////////////////////////////////////
+// matchPoints performs matching at a single point
+
+type matchPoint interface {
+	fmt.Stringer
+	matchHere(line []byte, ldx int) bool
+	setNext(matchPoint)
+}
+
+type basicMatchPoint struct {
+	matchChars string
+	inverted   bool
+	next       matchPoint
+}
+
+type oneOrMoreMatchPoint struct {
+	basicMatchPoint
+}
+
+type zeroOrMoreMatchPoint struct {
+	basicMatchPoint
+}
+
+type zeroOrOneMatchPoint struct {
+	basicMatchPoint
+}
+
+type matchEndMatchPoint struct{}
+
+// checking interfaces are implemented fully
+var (
+	_ matchPoint = &basicMatchPoint{}
+	_ matchPoint = matchEndMatchPoint{}
+)
+
+func (mp basicMatchPoint) recursiveString(mytype string) string {
+	var remainder string
+	if mp.next == nil {
+		remainder = ""
+	} else {
+		remainder = ", " + mp.next.String()
+	}
+	invChar := ""
+	if mp.inverted {
+		invChar = "^"
+	}
+	return fmt.Sprintf("%s: [%s%s]%s", mytype, invChar, mp.matchChars, remainder)
+}
+
+func (mp basicMatchPoint) String() string {
+	return mp.recursiveString("basic")
+}
+
+func (mp oneOrMoreMatchPoint) String() string {
+	return mp.recursiveString("oneOrMore")
+}
+
+func (mp zeroOrMoreMatchPoint) String() string {
+	return mp.recursiveString("zeroOrMore")
+}
+
+func (mp zeroOrOneMatchPoint) String() string {
+	return mp.recursiveString("zeroOrOne")
+}
+
+func (e matchEndMatchPoint) String() string {
+	return "[end '$']"
+}
+
+func (mp basicMatchPoint) matchByte(c byte) bool {
+	matches := strings.Contains(mp.matchChars, string(c))
+	if mp.inverted {
+		matches = !matches
+	}
+	return matches
+}
+
+func (mp basicMatchPoint) matchHere(line []byte, ldx int) bool {
+	debugf("mp=%#v\n", mp)
+	debugf("basicMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if ldx >= len(line) {
+		debugf("oops, got to long\n")
+		return false
+	}
+	if !mp.matchByte(line[ldx]) {
+		debugf("no match\n")
+		return false
+	}
+	if mp.next == nil {
+		debugf("finished matching\n")
+		return true
+	}
+	return mp.next.matchHere(line, ldx+1)
+}
+
+func (mp zeroOrOneMatchPoint) matchHere(line []byte, ldx int) bool {
+	debugf("mp=%#v\n", mp)
+	debugf("zeroOrOneMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.next == nil {
+		debugf("short circuit match\n")
+		return true
+	}
+	if ldx >= len(line) {
+		debugf("at end, so trying zero length\n")
+		return mp.next.matchHere(line, ldx)
+	}
+	if !mp.matchByte(line[ldx]) {
+		debugf("no match, so trying zero length\n")
+		return mp.next.matchHere(line, ldx)
+	}
+	return mp.next.matchHere(line, ldx+1)
+}
+
+func (mp zeroOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
+	debugf("mp=%#v\n", mp)
+	debugf("zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.next == nil {
+		debugf("short circuit match\n")
+		return true
+	}
+	if ldx >= len(line) {
+		debugf("at end, so trying zero length\n")
+		return mp.next.matchHere(line, ldx)
+	}
+	// finding max length that will match and then working backwards
+	maxLength := 0
+	for ; maxLength+ldx < len(line); maxLength++ {
+		if !mp.matchByte(line[maxLength+ldx]) {
+			// keep incrementing until we fail to match or hit the end
+			break
+		}
+	}
+	debugf("maxLength: %d\n", maxLength)
+	// here is the working backwards
+	for trialLength := maxLength; trialLength >= 0; trialLength-- {
+		debugf("trialLength: %d\n", trialLength)
+		if mp.next.matchHere(line, ldx+trialLength) {
+			return true
+		}
+	}
+	return false
+}
+
+func (mp oneOrMoreMatchPoint) matchHere(line []byte, ldx int) bool {
+	debugf("mp=%#v\n", mp)
+	debugf("zeroOrMoreMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	if mp.next == nil {
+		debugf("short circuit match\n")
+		return true
+	}
+	if ldx >= len(line) {
+		debugf("at end, so trying zero length\n")
+		return mp.next.matchHere(line, ldx)
+	}
+	// need at least one
+	if !mp.matchByte(line[ldx]) {
+		debugf("no match\n")
+		return false
+	}
+	// finding max length that will match and then working backwards
+	maxLength := 1
+	for ; maxLength+ldx < len(line); maxLength++ {
+		if !mp.matchByte(line[maxLength+ldx]) {
+			// keep incrementing until we fail to match or hit the end
+			break
+		}
+	}
+	debugf("maxLength: %d\n", maxLength)
+	// here is the working backwards
+	for trialLength := maxLength; trialLength >= 0; trialLength-- {
+		debugf("trialLength: %d\n", trialLength)
+		if mp.next.matchHere(line, ldx+trialLength) {
+			return true
+		}
+	}
+	return false
+}
+
+func (e matchEndMatchPoint) matchHere(line []byte, ldx int) bool {
+	debugf("mp=%#v\n", e)
+	debugf("matchEndMatchPoint.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
+	atEnd := ldx == len(line)
+	if atEnd {
+		debugf("Matched at end and regexp has $\n")
+		return true
+	}
+	debugf("Not at end and regexp has $\n")
+	return false
+}
+
+func (mp *basicMatchPoint) setNext(n matchPoint) {
+	mp.next = n
+}
+
+func (e matchEndMatchPoint) setNext(_ matchPoint) {
+	// should exit as this would be a clear error?
+	os.Exit(3)
 }
