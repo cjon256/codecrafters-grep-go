@@ -245,6 +245,12 @@ var tests = []RegexInput{
 		pattern:  "car*t",
 		expected: false,
 	},
+	{
+		name:     "parens_t",
+		line:     "caat",
+		pattern:  "ca(a)t",
+		expected: true,
+	},
 }
 
 func TestRegexTableDriven(t *testing.T) {
