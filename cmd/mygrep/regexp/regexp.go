@@ -136,9 +136,11 @@ func (gh groupHead) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) 
 }
 
 func (gt groupTail) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
-	if isSpecial {
+	debugf("got to tail while matching\n")
+	if isSpecial || gt.next == nil {
 		return true, 0
 	}
+
 	return gt.next.matchHere(line, ldx, isSpecial)
 }
 
@@ -151,7 +153,7 @@ func (gt groupTail) String() string {
 }
 
 func (gh groupHead) String() string {
-	fmt.Fprintf(os.Stderr, "got here %p %#v\n", gh, gh)
+	debugf("groupHead.String() %p\n", &gh)
 	remainder := ""
 	if gh.heads[0] != nil {
 		remainder = gh.heads[0].String()
@@ -173,6 +175,7 @@ func parsePattern(pattern string) matchPoint {
 	var parseHere func(bool) (matchPoint, matchPoint)
 
 	groupGlob := func(gh *groupHead) matchPoint {
+		debugf("groupGlob() remaining pattern=%s\n", pattern[rdx:])
 		if rdx+1 >= len(pattern) {
 			debugf("group glob: no glob, at end with '%s'\n", string(pattern[rdx]))
 			return gh
@@ -206,11 +209,11 @@ func parsePattern(pattern string) matchPoint {
 				fmt.Fprintf(os.Stderr, "error when parsing a group\n")
 				os.Exit(3)
 			}
-			fmt.Fprintf(os.Stderr, "head = got this %s\n", head)
+			debugf("head = got this %s\n", head)
 			gh.heads = append(gh.heads, head)
 			gh.tails = append(gh.tails, tail)
 			tail.setNext(&gt)
-			fmt.Fprintf(os.Stderr, "gh (%p) = have this %s\n", &gh, gh)
+			debugf("gh (%p) = have this %s\n", &gh, gh)
 			switch pattern[rdx] {
 			case ')':
 				return groupGlob(&gh), &gt
@@ -218,7 +221,7 @@ func parsePattern(pattern string) matchPoint {
 			case '|':
 				rdx++
 			default:
-				fmt.Fprintf(os.Stderr, "unexpected character: '%s' - error when parsing a group\n", string(pattern[rdx]))
+				debugf("unexpected character: '%s' - error when parsing a group\n", string(pattern[rdx]))
 				os.Exit(3)
 			}
 		}
@@ -272,7 +275,7 @@ func parsePattern(pattern string) matchPoint {
 				p, q := parseGroup()
 				regex = append(regex, p)
 				regex = append(regex, q)
-				fmt.Fprintf(os.Stderr, "pos = %s\n", pattern[rdx:])
+				debugf("pos = %s\n", pattern[rdx:])
 				rdx++ // move past )
 				continue
 
