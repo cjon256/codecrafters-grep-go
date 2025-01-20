@@ -17,6 +17,7 @@ func main() {
 
 	pattern := os.Args[2]
 	regex := regexp.ParseRegExp(pattern)
+	fmt.Fprintf(os.Stderr, "%s", regex)
 
 	// XXX ReadAll assumes we're only dealing with a single line
 	line, err := io.ReadAll(os.Stdin)
