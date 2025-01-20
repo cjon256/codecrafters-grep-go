@@ -172,6 +172,30 @@ func parsePattern(pattern string) matchPoint {
 	var rdx int
 	var parseHere func(bool) (matchPoint, matchPoint)
 
+	groupGlob := func(gh *groupHead) matchPoint {
+		if rdx+1 >= len(pattern) {
+			debugf("group glob: no glob, at end with '%s'\n", string(pattern[rdx]))
+			return gh
+		}
+		debugf("pattern='%s' rdx=%d\n", pattern, rdx)
+		switch pattern[rdx+1] {
+		case '?':
+			rdx++
+			debugf("group glob: got '?'\n")
+			return &groupZeroOrOneHead{*gh}
+		case '+':
+			rdx++
+			debugf("group glob: got '+'\n")
+			return &groupOneOrMoreHead{*gh}
+		case '*':
+			rdx++
+			debugf("group glob: got '*'\n")
+			return &groupZeroOrMoreHead{*gh}
+		default:
+			debugf("group glob: no glob, got '%s'\n", string(pattern[rdx+1]))
+			return gh
+		}
+	}
 	parseGroup := func() (matchPoint, matchPoint) {
 		gh := groupHead{}
 		gt := groupTail{}
@@ -189,7 +213,7 @@ func parsePattern(pattern string) matchPoint {
 			fmt.Fprintf(os.Stderr, "gh (%p) = have this %s\n", &gh, gh)
 			switch pattern[rdx] {
 			case ')':
-				return &gh, &gt
+				return groupGlob(&gh), &gt
 				// incrementing rdx handled by caller
 			case '|':
 				rdx++

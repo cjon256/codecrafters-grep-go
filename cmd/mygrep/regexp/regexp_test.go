@@ -251,6 +251,36 @@ var tests = []RegexInput{
 		pattern:  "ca(a)t",
 		expected: true,
 	},
+	{
+		name:     "parens_t",
+		line:     "caat",
+		pattern:  "c(aa)t",
+		expected: true,
+	},
+	{
+		name:     "alter_t",
+		line:     "caat",
+		pattern:  "c(ol|aa)t",
+		expected: true,
+	},
+	{
+		name:     "alter_t",
+		line:     "colt",
+		pattern:  "c(ol|aa)t",
+		expected: true,
+	},
+	{
+		name:     "alter_f",
+		line:     "cola",
+		pattern:  "c(ol|aa)t",
+		expected: false,
+	},
+	{
+		name:     "alter_f",
+		line:     "cont",
+		pattern:  "c(ol|aa)t",
+		expected: false,
+	},
 }
 
 func TestRegexTableDriven(t *testing.T) {
