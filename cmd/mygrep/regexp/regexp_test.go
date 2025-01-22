@@ -281,6 +281,24 @@ var tests = []RegexInput{
 		pattern:  "c(ol|aa)t",
 		expected: false,
 	},
+	// {
+	// 	name:     "backref_err",
+	// 	line:     "the cat is a cat",
+	// 	pattern:  "the cat is a \\1",
+	// 	expected: error, // there is no group
+	// },
+	{
+		name:     "backref_t",
+		line:     "the cat is a cat",
+		pattern:  "the (cat) is a \\1",
+		expected: true,
+	},
+	{
+		name:     "backref_f",
+		line:     "the cat is a cutey",
+		pattern:  "the (cat) is a \\1",
+		expected: false,
+	},
 }
 
 func TestRegexTableDriven(t *testing.T) {

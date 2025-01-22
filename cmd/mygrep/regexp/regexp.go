@@ -27,6 +27,7 @@ func debugf(format string, args ...interface{}) {
 type RegExp struct {
 	mps        matchPoint
 	matchStart bool
+	back       []string
 }
 
 func (re RegExp) String() string {
@@ -69,7 +70,10 @@ func ParseRegExp(pattern string) RegExp {
 		pattern = pattern[1:]
 	}
 
-	regex.mps = parsePattern(pattern)
+	back := []string{}
+	regex.back = back
+
+	regex.mps = parsePattern(pattern, back)
 	debugf("regex = '%+v'\n", regex)
 	return regex
 }
@@ -104,9 +108,9 @@ const (
 )
 
 type groupHead struct {
-	heads     []matchPoint
-	tails     []matchPoint
-	groupTail matchPoint
+	heads []matchPoint
+	tails []matchPoint
+	tail  *groupTail
 }
 
 type groupOneOrMoreHead struct {
@@ -122,10 +126,14 @@ type groupZeroOrMoreHead struct {
 }
 
 type groupTail struct {
-	next matchPoint
+	startLdx int
+	backrefs []string
+	index    int
+	next     matchPoint
 }
 
 func (gh groupHead) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
+	gh.tail.startLdx = ldx
 	for i := 0; i < len(gh.heads); i++ {
 		matched, bytesUsed := gh.heads[i].matchHere(line, ldx, isSpecial)
 		if matched {
@@ -137,6 +145,9 @@ func (gh groupHead) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) 
 
 func (gt groupTail) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
 	debugf("got to tail while matching\n")
+	brstr := string(line[gt.startLdx:ldx])
+	gt.backrefs[gt.index] = brstr
+	debugf("brstr='%s'\n", brstr)
 	if isSpecial || gt.next == nil {
 		return true, 0
 	}
@@ -166,13 +177,14 @@ func (gt *groupTail) setNext(n matchPoint) {
 }
 
 func (gh *groupHead) setNext(n matchPoint) {
-	gh.groupTail = n
+	// does nothing
 }
 
 // returns a linked list representing the regexp pattern
-func parsePattern(pattern string) matchPoint {
+func parsePattern(pattern string, backrefs []string) matchPoint {
 	var rdx int
 	var parseHere func(bool) (matchPoint, matchPoint)
+	backdx := 0
 
 	groupGlob := func(gh *groupHead) matchPoint {
 		debugf("groupGlob() remaining pattern=%s\n", pattern[rdx:])
@@ -201,7 +213,12 @@ func parsePattern(pattern string) matchPoint {
 	}
 	parseGroup := func() (matchPoint, matchPoint) {
 		gh := groupHead{}
-		gt := groupTail{}
+		backrefs = append(backrefs, "")
+		debugf("backrefs = %#v\n", backrefs)
+		gt := groupTail{backrefs: backrefs, index: backdx}
+		backdx++
+		gh.tail = &gt
+
 		for {
 			head, tail := parseHere(true)
 			if head == nil || rdx >= len(pattern) {
@@ -307,6 +324,8 @@ func parsePattern(pattern string) matchPoint {
 						p = glob(&basicMatchPoint{matchChars: wordChars})
 					case 'd':
 						p = glob(&basicMatchPoint{matchChars: digits})
+					case '1':
+						p = &backrefPoint{backrefs, 0, nil}
 					default:
 						p = glob(&basicMatchPoint{matchChars: string(pattern[rdx])})
 					}
@@ -344,6 +363,43 @@ type matchPoint interface {
 	setNext(matchPoint)
 }
 
+type backrefPoint struct {
+	backrefString []string
+	index         int
+	next          matchPoint
+}
+
+func (b backrefPoint) String() string {
+	return "[backref]"
+}
+
+func (b *backrefPoint) setNext(n matchPoint) {
+	b.next = n
+}
+
+func (b backrefPoint) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
+	debugf("backrefPoint.matchHere(%s, %d, %v)\n", string(line[ldx:]), ldx, isSpecial)
+	debugf("backref=%s\n", b.backrefString[b.index])
+	backref := []byte(b.backrefString[b.index])
+	if ldx+len(backref) > len(line) {
+		debugf("oops, got to long\n")
+		return false, 0
+	}
+	for _, c := range backref {
+		if line[ldx] != c {
+			return false, 0
+		}
+		ldx++
+	}
+	debugf("line_remaining=%s\n", string(line[ldx:]))
+
+	if b.next == nil {
+		debugf("finished matching\n")
+		return true, len(backref)
+	}
+	return b.next.matchHere(line, ldx, isSpecial)
+}
+
 type basicMatchPoint struct {
 	matchChars string
 	inverted   bool
@@ -373,6 +429,7 @@ var (
 	_ matchPoint = matchEndMatchPoint{}
 	_ matchPoint = &groupHead{}
 	_ matchPoint = &groupTail{}
+	_ matchPoint = &backrefPoint{}
 )
 
 func (mp basicMatchPoint) recursiveString(mytype string) string {
@@ -496,6 +553,11 @@ func (mp oneOrMoreMatchPoint) matchHere(line []byte, ldx int, isSpecial bool) (b
 	if !mp.matchByte(line[ldx]) {
 		debugf("no match\n")
 		return false, 0
+	}
+	if !isSpecial && mp.next == nil {
+		debugf("short circuit match\n")
+		// really we would want to do the full match is we wanted to show the matching part... but we do not so bug out here...
+		return true, 1
 	}
 	// finding max length that will match and then working backwards
 	maxLength := 1
