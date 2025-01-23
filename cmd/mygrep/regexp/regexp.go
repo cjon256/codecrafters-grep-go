@@ -31,7 +31,7 @@ type RegExp struct {
 }
 
 func (re RegExp) String() string {
-	return fmt.Sprintf("#[RegExp(matchStart=%v): '%s']", re.matchStart, re.mps)
+	return fmt.Sprintf("#[RegExp(matchStart=%v): '%s' %d]", re.matchStart, re.mps, len(re.back))
 }
 
 func (re *RegExp) MatchLine(line []byte) bool {
@@ -70,10 +70,9 @@ func ParseRegExp(pattern string) RegExp {
 		pattern = pattern[1:]
 	}
 
-	back := []string{}
-	regex.back = back
+	regex.back = []string{}
 
-	regex.mps = parsePattern(pattern, back)
+	regex.mps = parsePattern(pattern, &regex.back)
 	debugf("regex = '%+v'\n", regex)
 	return regex
 }
@@ -127,12 +126,13 @@ type groupZeroOrMoreHead struct {
 
 type groupTail struct {
 	startLdx int
-	backrefs []string
+	backrefs *[]string
 	index    int
 	next     matchPoint
 }
 
 func (gh groupHead) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
+	debugf("groupHead.matchHere('%s', %d)\n", string(line)[ldx:], ldx)
 	gh.tail.startLdx = ldx
 	for i := 0; i < len(gh.heads); i++ {
 		matched, bytesUsed := gh.heads[i].matchHere(line, ldx, isSpecial)
@@ -146,8 +146,18 @@ func (gh groupHead) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) 
 func (gt groupTail) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
 	debugf("got to tail while matching\n")
 	brstr := string(line[gt.startLdx:ldx])
-	gt.backrefs[gt.index] = brstr
+	debugf("before backrefs=[")
+	for i, s := range *(gt.backrefs) {
+		debugf("%d: '%s', ", i, s)
+	}
+	debugf("]\n")
+	(*(gt.backrefs))[gt.index] = brstr
 	debugf("brstr='%s'\n", brstr)
+	debugf("after backrefs=[")
+	for i, s := range *(gt.backrefs) {
+		debugf("%d: '%s', ", i, s)
+	}
+	debugf("]\n")
 	if isSpecial || gt.next == nil {
 		return true, 0
 	}
@@ -181,7 +191,7 @@ func (gh *groupHead) setNext(n matchPoint) {
 }
 
 // returns a linked list representing the regexp pattern
-func parsePattern(pattern string, backrefs []string) matchPoint {
+func parsePattern(pattern string, backrefs *[]string) matchPoint {
 	var rdx int
 	var parseHere func(bool) (matchPoint, matchPoint)
 	backdx := 0
@@ -213,8 +223,9 @@ func parsePattern(pattern string, backrefs []string) matchPoint {
 	}
 	parseGroup := func() (matchPoint, matchPoint) {
 		gh := groupHead{}
-		backrefs = append(backrefs, "")
-		debugf("backrefs = %#v\n", backrefs)
+		str := ""
+		*backrefs = append(*backrefs, str)
+		debugf("backrefs = %+v\n", *backrefs)
 		gt := groupTail{backrefs: backrefs, index: backdx}
 		backdx++
 		gh.tail = &gt
@@ -326,6 +337,22 @@ func parsePattern(pattern string, backrefs []string) matchPoint {
 						p = glob(&basicMatchPoint{matchChars: digits})
 					case '1':
 						p = &backrefPoint{backrefs, 0, nil}
+					case '2':
+						p = &backrefPoint{backrefs, 1, nil}
+					case '3':
+						p = &backrefPoint{backrefs, 2, nil}
+					case '4':
+						p = &backrefPoint{backrefs, 3, nil}
+					case '5':
+						p = &backrefPoint{backrefs, 4, nil}
+					case '6':
+						p = &backrefPoint{backrefs, 5, nil}
+					case '7':
+						p = &backrefPoint{backrefs, 6, nil}
+					case '8':
+						p = &backrefPoint{backrefs, 7, nil}
+					case '9':
+						p = &backrefPoint{backrefs, 8, nil}
 					default:
 						p = glob(&basicMatchPoint{matchChars: string(pattern[rdx])})
 					}
@@ -364,7 +391,7 @@ type matchPoint interface {
 }
 
 type backrefPoint struct {
-	backrefString []string
+	backrefString *[]string
 	index         int
 	next          matchPoint
 }
@@ -378,9 +405,18 @@ func (b *backrefPoint) setNext(n matchPoint) {
 }
 
 func (b backrefPoint) matchHere(line []byte, ldx int, isSpecial bool) (bool, int) {
-	debugf("backrefPoint.matchHere(%s, %d, %v)\n", string(line[ldx:]), ldx, isSpecial)
-	debugf("backref=%s\n", b.backrefString[b.index])
-	backref := []byte(b.backrefString[b.index])
+	debugf("backrefPoint'%d'.matchHere(%s, %d, %v)\n", b.index+1, string(line[ldx:]), ldx, isSpecial)
+	backref := []byte((*(b.backrefString))[b.index])
+	debugf("backrefs = [")
+	for i, s := range *(b.backrefString) {
+		debugf("%d: %s", i, s)
+		if i == len(*(b.backrefString))-1 {
+			debugf(", ")
+		}
+	}
+	debugf("]\n")
+
+	debugf("backref=%s\n", string(backref))
 	if ldx+len(backref) > len(line) {
 		debugf("oops, got to long\n")
 		return false, 0
